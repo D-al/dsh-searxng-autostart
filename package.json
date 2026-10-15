@@ -1,0 +1,35 @@
+{
+  "name": "dsh-searxng-autostart",
+  "version": "1.0.0",
+  "description": "启动 DeepSeek Harness 时自动在后台(隐藏窗口)拉起本地 SearXNG, 让本地模型具备免费联网搜索能力; 退出 dsh 时一并关闭。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "searxng",
+    "search"
+  ],
+  "license": "MIT",
+  "files": [
+    "index.mjs",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "displayName": "SearXNG 自动启动",
+    "description": "随 DeepSeek Harness 启动, 在后台隐藏拉起本地 SearXNG(供本地模型免费联网搜索); 退出 dsh 时关闭。",
+    "engines": {
+      "dsh": ">=0.2.0-rc.2"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
