@@ -28,6 +28,7 @@ function findSearxng() {
     path.join(home, 'Documents', 'SearXNG'),
   ]
   for (const dir of cands) {
+    // 用 python.exe(pythonw 无控制台, SearXNG 写 stderr 会崩, 不可用)
     const py = path.join(dir, 'venv', 'Scripts', 'python.exe')
     try {
       if (fs.existsSync(py)) return { dir, python: py }
@@ -63,13 +64,19 @@ export function apply(ctx) {
           if (!found) { dbg('未找到 SearXNG 安装目录'); return }
           dbg('SearXNG: dir=' + found.dir + ' python=' + found.python)
 
-          // detached + stdio:'ignore' → 后台驻留、不随启动者退出; windowsHide → 无控制台窗口
+          // 关键: 不能用 stdio:'ignore' —— Flask 往 stderr 写日志, 拿到空设备会崩(实测起后即退)。
+          // 改为把 stdout/stderr 重定向到真实日志文件; detached → 后台驻留; windowsHide → 无窗口。
+          const logPath = path.join(found.dir, 'searxng-run.log')
+          let fd = null
+          try { fd = fs.openSync(logPath, 'a') } catch (e) { /* 忽略 */ }
           child = spawn(found.python, ['-m', 'searx.webapp'], {
             cwd: found.dir,
             detached: true,
-            stdio: 'ignore',
+            stdio: ['ignore', fd ?? 'ignore', fd ?? 'ignore'],
             windowsHide: true,
           })
+          if (fd !== null) { try { fs.closeSync(fd) } catch (e) { /* 忽略 */ } }
+          dbg('日志输出到: ' + logPath)
           child.on('error', (e) => dbg('spawn ERROR: ' + (e && e.message)))
           child.on('spawn', () => dbg('spawned OK pid=' + child.pid))
           child.unref()
