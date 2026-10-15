@@ -1,7 +1,8 @@
 // index.mjs — dsh-searxng-autostart
 // 启动 DeepSeek Harness 时自动在后台(隐藏窗口)拉起本地 SearXNG, 让本地模型能免费联网搜索;
-// 退出 dsh 时关闭自己拉起的那个 SearXNG(按 PID 精确杀, 不会误伤其他 python 进程)。
+// 退出 dsh 时关闭自己拉起的那个(按 PID 精确杀, 不误伤其他 python 进程)。
 // 全程 try/catch: 任何失败都静默, 绝不拖垮 dsh 启动。
+// 注意: Cordis 下访问 ctx.config 需先声明 inject, 本插件不需要读配置(自动探测), 故不使用 ctx.config。
 import { spawn, execFile } from 'node:child_process'
 import net from 'node:net'
 import fs from 'node:fs'
@@ -13,10 +14,10 @@ function dbg(msg) {
   try { fs.appendFileSync(LOG, new Date().toISOString() + ' ' + msg + '\n') } catch (e) { /* 忽略 */ }
 }
 
-const DEFAULT_PORT = 8888
+const PORT = 8888
 let booted = false
 
-// 自动探测 SearXNG 安装目录(找 venv 里的 python), 不写死盘符
+// 自动探测 SearXNG 安装目录(找 venv 里的 python)
 function findSearxng() {
   const home = os.homedir()
   const cands = [
@@ -35,9 +36,9 @@ function findSearxng() {
   return null
 }
 
-function probe(port) {
+function probe() {
   return new Promise((resolve) => {
-    const sock = net.connect(port, '127.0.0.1')
+    const sock = net.connect(PORT, '127.0.0.1')
     sock.on('connect', () => { sock.destroy(); resolve(true) })
     sock.on('error', () => { sock.destroy(); resolve(false) })
     sock.setTimeout(1500, () => { sock.destroy(); resolve(false) })
@@ -54,14 +55,11 @@ export function apply(ctx) {
         booted = true
         dbg('boot start')
         try {
-          const port = (ctx && ctx.config && Number(ctx.config.port)) || DEFAULT_PORT
-          const up = await probe(port)
-          dbg('probe(' + port + ') = ' + up)
+          const up = await probe()
+          dbg('probe(' + PORT + ') = ' + up)
           if (up) { dbg('SearXNG 已在运行, 跳过'); return }
 
-          const found = (ctx && ctx.config && ctx.config.searxngDir)
-            ? { dir: ctx.config.searxngDir, python: path.join(ctx.config.searxngDir, 'venv', 'Scripts', 'python.exe') }
-            : findSearxng()
+          const found = findSearxng()
           if (!found) { dbg('未找到 SearXNG 安装目录'); return }
           dbg('SearXNG: dir=' + found.dir + ' python=' + found.python)
 
@@ -80,7 +78,6 @@ export function apply(ctx) {
       }
       boot()
 
-      // 卸载/禁用插件时, 只关掉本次拉起的那个 SearXNG(按 PID 精确杀, 不误伤其他 python)
       return () => {
         dbg('disposer called; childPid=' + (child && child.pid))
         try {
