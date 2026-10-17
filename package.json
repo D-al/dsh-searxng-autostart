@@ -1,6 +1,6 @@
 {
   "name": "dsh-searxng-autostart",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "DeepSeek Harness 插件: 给内置「网页搜索」接入本地 SearXNG(免 API key 免费联网), 并随 dsh 启动在后台拉起 SearXNG。",
   "type": "module",
   "main": "index.mjs",

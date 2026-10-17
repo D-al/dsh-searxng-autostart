@@ -9,7 +9,7 @@ DeepSeek Harness（dsh）插件：让本地模型**免费联网搜索**，不依
    之后模型调用内置的 `web_search` 工具时，直接查你本机运行的 SearXNG，免费、无需 API key。
    （dsh 官方只内置 `deepseek` / `exa` / `perplexity` 三个 provider，全都要 API key；本插件补上「本地自建 SearXNG」这一路。）
 2. **随 dsh 自动拉起 SearXNG**
-   dsh 启动时在后台（最小化窗口）拉起本地 SearXNG；退出 dsh 时按命令行精确关掉**自己拉起的那个**（只杀 `searx.webapp` 的 python，不误伤其他 python 进程）。
+   dsh 启动时在后台**无窗口**（不占任务栏、避免误触关闭）拉起本地 SearXNG；退出 dsh 时按命令行精确关掉**自己拉起的那个**（只杀 `searx.webapp` 的 python，不误伤其他 python 进程）。
 
 全程 `try/catch` 包裹，任何失败都静默，**绝不拖垮 dsh 启动**。
 

@@ -7,8 +7,8 @@
 //      (dsh 官方只内置 deepseek / exa / perplexity 三个 provider, 全要 API key;
 //       本插件补上「本地自建 SearXNG」这一路。)
 //   2) SearXNG 自动启动
-//      随 dsh 启动, 在后台(最小化窗口)拉起本地 SearXNG; 退出 dsh 时按命令行精确关掉
-//      自己拉起的那个(只杀 searx.webapp 的 python, 不误伤其他 python 进程)。
+//      随 dsh 启动, 在后台无窗口(不占任务栏)拉起本地 SearXNG; 退出 dsh 时按命令行
+//      精确关掉自己拉起的那个(只杀 searx.webapp 的 python, 不误伤其他 python 进程)。
 //
 // 设计原则:
 //   - 全程 try/catch, 任何失败都静默, 绝不拖垮 dsh 启动。
@@ -92,7 +92,9 @@ class SearxngSearchProvider {
 }
 
 // ───────────────────────── 自动启动 SearXNG ─────────────────────────
-// 探测 SearXNG 安装目录: 优先用环境变量, 否则在常见位置找 venv 里的 python.exe。
+// 探测 SearXNG 安装目录: 优先用环境变量, 否则在常见位置找 venv 里的 python。
+// 优先 pythonw.exe(GUI 子系统, 天生无控制台窗口); 找不到则退回 python.exe
+// (配合 CREATE_NO_WINDOW 启动标志, 同样不产生窗口)。
 function findSearxng() {
   const home = os.homedir()
   const cands = []
@@ -111,10 +113,11 @@ function findSearxng() {
     path.join(home, 'Documents', 'SearXNG'),
   )
   for (const dir of cands) {
-    // 用 python.exe(pythonw 无控制台, SearXNG 写 stderr 会崩, 不可用)
-    const py = path.join(dir, 'venv', 'Scripts', 'python.exe')
     try {
-      if (fs.existsSync(py)) return { dir, python: py }
+      const pyw = path.join(dir, 'venv', 'Scripts', 'pythonw.exe')
+      if (fs.existsSync(pyw)) return { dir, python: pyw, noWindowFlag: false }
+      const py = path.join(dir, 'venv', 'Scripts', 'python.exe')
+      if (fs.existsSync(py)) return { dir, python: py, noWindowFlag: true }
     } catch (e) { /* 忽略 */ }
   }
   return null
@@ -162,17 +165,23 @@ export function apply(ctx, config) {
           if (!found) { dbg('未找到 SearXNG 安装目录'); return }
           dbg('SearXNG: dir=' + found.dir + ' python=' + found.python)
 
-          // 用 start /min 最小化启动: windowsHide 在 dsh 内无效(Windows Terminal 会接管控制台程序),
-          // 改为最小化 —— 窗口只出现在任务栏, 不再遮挡 dsh; python 拿到的是真实控制台(有有效 stderr, 不会崩)。
-          // 日志同时重定向到 SearXNG 目录下的 searxng-run.log 便于排查。
+          // 无窗口启动(任务栏不出现图标, 避免误触关闭):
+          //   - pythonw.exe 是 GUI 子系统, 根本不创建控制台(实测 MainWindowHandle=0);
+          //   - stdio 必须重定向到真实日志文件 —— SearXNG(Flask)启动即写 stderr,
+          //     若给空设备(stdio:'ignore')会立刻崩溃(这是历史上"启动后即退出"的根因);
+          //   - windowsHide + detached 双保险; 走 python.exe 时额外加 CREATE_NO_WINDOW。
           const logPath = path.join(found.dir, 'searxng-run.log')
-          child = spawn('cmd.exe', ['/c', 'start', '""', '/min', found.python, '-m', 'searx.webapp', '>>', logPath, '2>&1'], {
+          const logFd = fs.openSync(logPath, 'a')
+          const spawnOpts = {
             cwd: found.dir,
             detached: true,
-            stdio: 'ignore',
+            stdio: ['ignore', logFd, logFd],
             windowsHide: true,
-          })
-          dbg('start /min 启动; 日志=' + logPath)
+          }
+          if (found.noWindowFlag) spawnOpts.creationFlags = 0x08000000 // CREATE_NO_WINDOW
+          child = spawn(found.python, ['-m', 'searx.webapp'], spawnOpts)
+          fs.closeSync(logFd) // 句柄已被子进程继承, 父进程即可关闭
+          dbg('无窗口启动(不进任务栏); 日志=' + logPath)
           child.on('error', (e) => dbg('spawn ERROR: ' + (e && e.message)))
           child.on('spawn', () => dbg('spawned OK pid=' + child.pid))
           child.unref()
