@@ -134,8 +134,12 @@ function probe() {
 
 // ───────────────────────── Cordis 插件 ─────────────────────────
 export const name = 'searxng-autostart'
-// 需要 ctx.web 才能注册 provider(web 是 base 层服务, 启动早期就有)。
-export const inject = ['web']
+// 需要注入的服务:
+//   - web   : 注册 SearXNG 搜索 provider(web 是 base 层服务, 启动早期就有)
+//   - config: 读取本插件配置(searxngBaseURL 等)。Cordis 中访问 ctx 上的属性必须先在
+//             inject 声明, 否则会抛 "cannot get property 'config' without inject"
+//             (修复启动早期偶发的 boot EXCEPTION)。
+export const inject = ['web', 'config']
 
 export function apply(ctx, config) {
   dbg('apply called')
