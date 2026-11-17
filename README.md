@@ -32,6 +32,38 @@ dsh 启动
 
 ---
 
+## 问题、途径与参考（2026-11-17 补叙）
+
+### 遇到的问题
+
+1. **本地模型免费联网没有路**：dsh 官方 web_search 只内置三个 provider（deepseek / exa / perplexity），**全都要 API key**——本地 35B 模型的联网搜索要么花钱、要么没有。
+2. **SearXNG 生命周期无管理**：本地自建了 SearXNG（metasearch 引擎，聚合数十个搜索引擎），但每次开 dsh 前要手动起服务、dsh 退出后进程残留。
+3. **provider 与服务生命周期脱节**：搜索提供方是静态配置的——SearXNG 没起来时 web_search 只会静默失败，没有任何恢复机制。
+
+### 途径
+
+1. **SearXNG 本地自建**：metasearch 引擎（聚合 Google/Bing/DuckDuckGo 等），免费、无需 API key、结果质量可控
+2. **provider 动态注册**：通过 `ctx.web` 注册 `SearxngSearchProvider`（id: searxng），把内置 web_search 的查询路由到 `127.0.0.1:8888/search?format=json`——官方 provider 接口的无钥匙替代
+3. **生命周期绑定**：dsh 启动 → 探测 → 无窗口拉起（最小化窗口，日志落文件）；退出 → 按命令行精确杀（只杀 `searx.webapp` 的 python，不误伤其他 python 进程）
+4. **全 try/catch 包裹**：任何失败静默，绝不拖垮 dsh 启动
+
+### 参考的论文与社区实践
+
+| 来源 | 用于 |
+| --- | --- |
+| **SearXNG 项目** | metasearch 引擎本体；JSON 输出格式（`search.formats` 需开启 json）|
+| **dsh-session-trash-bin（社区插件）** | bundle 包形态：package.json 的 `dsh.bundle.patch` + 包内 cordis.patch.yml |
+| **dsh web 服务 provider 接口** | SearxngSearchProvider 的注册与 dispose 生命周期（ctx.effect 兜底注销）|
+| **实测会话** | 检验会话全程使用 web_search（SearXNG 路径），AGENTS.md 搜索协议以它为唯一联网通道 |
+
+### 解决到什么程度
+
+- **web_search 免费可用**：本地模型联网搜索零 API key、零成本（2026-11-17 全天检验会话实测使用）
+- 生命周期全自动：开 dsh 即有搜索，退出即清理
+- provider 注册 + dispose 生命周期完整（HMR/卸载时注销）
+
+---
+
 ## 前置条件
 
 1. **已安装并初始化 SearXNG**（含 Python 虚拟环境 `venv`）。
